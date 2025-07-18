@@ -1,3 +1,4 @@
+#![allow(unused_imports)]
 use actix_web::{HttpResponse, web};
 use chrono::Utc;
 use serde::Deserialize;
