@@ -1,5 +1,8 @@
+use std::net::TcpListener;
+
 use actix_web::{App, http::StatusCode, test, web};
 use hermes::{
+    app::run,
     configuration::{DatabaseSettings, get_configuration},
     routes::{health_check, subscribe},
 };
@@ -13,12 +16,18 @@ pub struct TestApp {
 
 impl TestApp {
     pub async fn spawn() -> TestApp {
+        let listner = TcpListener::bind("127.0.0.1:0").expect("Failed to bind random port");
+        let port = listner.local_addr().unwrap().port();
+
         let mut configuration = get_configuration().expect("Failed to get configuration");
         configuration.database.database_name = Uuid::new_v4().to_string();
         let db_pool = configure_database(&configuration.database).await;
 
+        let server = run(listner, db_pool.clone()).expect("Failed to bind to address");
+        let _ = actix_web::rt::spawn(server);
+
         TestApp {
-            address: format!("http://127.0.0.1:8080"),
+            address: format!("http://127.0.0.1:{}", port),
             db_pool,
         }
     }
