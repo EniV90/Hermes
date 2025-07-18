@@ -15,7 +15,7 @@ env:
   SQLX_FEATURES: "rustls,postgres"
   APP_USER: app
   APP_USER_PWD: secret
-  APP_DB_NAME: newsletter
+  APP_DB_NAME: hermes_newsletter
 
 jobs:
   test:
@@ -33,7 +33,12 @@ jobs:
           POSTGRES_DB: postgres
 
         ports:
-          - 5432:5432
+          - 5433:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - name: Check out repository code
 
@@ -54,14 +59,21 @@ jobs:
 
           # Create the application user
           CREATE_QUERY="CREATE USER ${APP_USER} WITH PASSWORD '${APP_USER_PWD}';"
-          PGPASSWORD="password" psql -U "postgres" -h "localhost" -c "${CREATE_QUERY}"
+          PGPASSWORD="password" psql -U "postgres" -h "localhost" -p 5433 -c "${CREATE_QUERY}"
 
           # Grant create db privileges to the app user
           GRANT_QUERY="ALTER USER ${APP_USER} CREATEDB;"
-          PGPASSWORD="password" psql -U "postgres" -h "localhost" -c "${GRANT_QUERY}"
+          PGPASSWORD="password" psql -U "postgres" -h "localhost" -p 5433 -c "${GRANT_QUERY}"
 
       - name: Migrate database
         run: SKIP_DOCKER=true ./scripts/init_db.sh
+        env:
+          DB_PORT: 5433
+          SUPERUSER: postgres
+          SUPERUSER_PWD: password
+          APP_USER: app
+          APP_USER_PWD: secret
+          APP_DB_NAME: hermes_newsletter
 
       - name: Run tests
         run: cargo test
@@ -109,7 +121,12 @@ jobs:
           POSTGRES_PASSWORD: password
           POSTGRES_DB: postgres
         ports:
-          - 5432:5432
+          - 5433:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - uses: actions/checkout@v4
       - name: Install the Rust toolchain
@@ -128,13 +145,20 @@ jobs:
 
           # Create the application user
           CREATE_QUERY="CREATE USER ${APP_USER} WITH PASSWORD '${APP_USER_PWD}';"
-          PGPASSWORD="password" psql -U "postgres" -h "localhost" -c "${CREATE_QUERY}"
+          PGPASSWORD="password" psql -U "postgres" -h "localhost" -p 5433 -c "${CREATE_QUERY}"
 
           # Grant create db privileges to the app user
           GRANT_QUERY="ALTER USER ${APP_USER} CREATEDB;"
           PGPASSWORD="password" psql -U "postgres" -h "localhost" -c "${GRANT_QUERY}"
       - name: Migrate database
         run: SKIP_DOCKER=true ./scripts/init_db.sh
+        env:
+          DB_PORT: 5433
+          SUPERUSER: postgres
+          SUPERUSER_PWD: password
+          APP_USER: app
+          APP_USER_PWD: secret
+          APP_DB_NAME: hermes_newsletter
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
       - name: Generate code coverage
