@@ -22,6 +22,8 @@ jobs:
     name: Test
 
     runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgres://app:secret@localhost:5433/hermes_newsletter
 
     services:
       postgres:
@@ -113,6 +115,8 @@ jobs:
   coverage:
     name: Code coverage
     runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgres://app:secret@localhost:5433/hermes_newsletter
     services:
       postgres:
         image: postgres:14
@@ -123,10 +127,10 @@ jobs:
         ports:
           - 5433:5432
         options: >-
-            --health-cmd pg_isready
-            --health-interval 10s
-            --health-timeout 5s
-            --health-retries 5
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - uses: actions/checkout@v4
       - name: Install the Rust toolchain
