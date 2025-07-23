@@ -1,13 +1,27 @@
-use std::net::TcpListener;
-
 use actix_web::{App, http::StatusCode, test, web};
 use hermes::{
     app::run,
     configuration::{DatabaseSettings, get_configuration},
     routes::{health_check, subscribe},
+    telemetry::{get_subscriber, init_subscriber},
 };
+use once_cell::sync::Lazy;
 use sqlx::{Connection, Executor, PgConnection, PgPool};
+use std::net::TcpListener;
+use urlencoding::encode;
 use uuid::Uuid;
+
+static TRACING: Lazy<()> = Lazy::new(|| {
+    let default_filter_level = "info".to_string();
+    let subscriber_name = "test".to_string();
+    if std::env::var("TEST_LOG").is_ok() {
+        let subscriber = get_subscriber(subscriber_name, default_filter_level, std::io::stdout);
+        init_subscriber(subscriber);
+    } else {
+        let subscriber = get_subscriber(subscriber_name, default_filter_level, std::io::sink);
+        init_subscriber(subscriber);
+    }
+});
 
 pub struct TestApp {
     pub address: String,
@@ -16,14 +30,16 @@ pub struct TestApp {
 
 impl TestApp {
     pub async fn spawn() -> TestApp {
-        let listner = TcpListener::bind("127.0.0.1:0").expect("Failed to bind random port");
-        let port = listner.local_addr().unwrap().port();
+        Lazy::force(&TRACING);
+
+        let listener = TcpListener::bind("127.0.0.1:0").expect("Failed to bind random port");
+        let port = listener.local_addr().unwrap().port();
 
         let mut configuration = get_configuration().expect("Failed to get configuration");
         configuration.database.database_name = Uuid::new_v4().to_string();
         let db_pool = configure_database(&configuration.database).await;
 
-        let server = run(listner, db_pool.clone()).expect("Failed to bind to address");
+        let server = run(listener, db_pool.clone()).expect("Failed to bind to address");
         let _ = actix_web::rt::spawn(server);
 
         TestApp {
@@ -49,7 +65,7 @@ pub async fn configure_database(config: &DatabaseSettings) -> PgPool {
     sqlx::migrate!("./migrations")
         .run(&db_pool)
         .await
-        .expect("Failed to migrate databsae");
+        .expect("Failed to migrate database");
 
     db_pool
 }
@@ -75,7 +91,9 @@ async fn subscribe_returns_a_200_for_valid_form_data() {
     )
     .await;
 
-    let body = "name=victor&email=eni_v%40gmail.com";
+    let email = format!("eni_v+{}@gmail.com", Uuid::new_v4());
+    let encoded_email = encode(&email);
+    let body = format!("name=victor&email={}", encoded_email);
     let req = test::TestRequest::post()
         .uri("/subscribe")
         .insert_header(("Content-Type", "application/x-www-form-urlencoded"))
