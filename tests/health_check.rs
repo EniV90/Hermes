@@ -6,9 +6,9 @@ use hermes::{
     telemetry::{get_subscriber, init_subscriber},
 };
 use once_cell::sync::Lazy;
+use secrecy::ExposeSecret;
 use sqlx::{Connection, Executor, PgConnection, PgPool};
 use std::net::TcpListener;
-use urlencoding::encode;
 use uuid::Uuid;
 
 static TRACING: Lazy<()> = Lazy::new(|| {
@@ -50,16 +50,17 @@ impl TestApp {
 }
 pub async fn configure_database(config: &DatabaseSettings) -> PgPool {
     //create database
-    let mut connection = PgConnection::connect(&config.connection_string())
-        .await
-        .expect("Failed to connect to Postgres");
+    let mut connection =
+        PgConnection::connect(&config.connection_string_without_db().expose_secret())
+            .await
+            .expect("Failed to connect to Postgres");
     connection
         .execute(format!(r#"CREATE DATABASE "{}";"#, config.database_name).as_str())
         .await
         .expect("Failed to create database.");
 
     //Migrate database
-    let db_pool = PgPool::connect(&config.connection_string())
+    let db_pool = PgPool::connect(&config.connection_string().expose_secret())
         .await
         .expect("Failed to conect to Postgres.");
     sqlx::migrate!("./migrations")
@@ -91,9 +92,7 @@ async fn subscribe_returns_a_200_for_valid_form_data() {
     )
     .await;
 
-    let email = format!("eni_v+{}@gmail.com", Uuid::new_v4());
-    let encoded_email = encode(&email);
-    let body = format!("name=victor&email={}", encoded_email);
+    let body = "name=victor&email=eni_v%40gmail.com";
     let req = test::TestRequest::post()
         .uri("/subscribe")
         .insert_header(("Content-Type", "application/x-www-form-urlencoded"))
